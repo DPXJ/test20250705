@@ -4,10 +4,18 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
+    types: [opened, synchronize, reopened]
+
+# 设置 GITHUB_TOKEN 的权限
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  deployments: write
+  pull-requests: write
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,11 +33,33 @@ jobs:
       
     - name: 构建项目
       run: npm run build
+      env:
+        NODE_ENV: production
+        
+    # 配置 GitHub Pages
+    - name: 设置 Pages
+      uses: actions/configure-pages@v4
       
-    - name: 部署到 GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    - name: 上传构建产物
+      uses: actions/upload-pages-artifact@v3
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist
-        cname: # 如果有自定义域名，在这里填写 
+        path: ./dist
+
+    # 部署到 GitHub Pages（仅在主分支）
+    - name: 部署到 GitHub Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/deploy-pages@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    # 部署预览环境（在 PR 时）
+    - name: 部署到预览环境
+      if: github.event_name == 'pull_request'
+      uses: rossjrw/pr-preview-action@v1
+      with:
+        source-dir: ./dist
+        preview-branch: preview
+        umbrella-dir: pr-preview
+        action: auto
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
